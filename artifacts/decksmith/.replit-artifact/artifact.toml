@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Decksmith"
+description = "Build, understand, edit, and save Magic: The Gathering Commander decks using real card catalog data, legality checks, and clear guidance for every experience level."
+version = "1.0.0"
+id = "artifacts/decksmith"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18845
+
+[services.development]
+run = "pnpm --filter @workspace/decksmith run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/decksmith", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/decksmith/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18845"
+BASE_PATH = "/"
