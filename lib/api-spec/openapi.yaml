@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: catalog
+    description: Live Magic card and set catalog
+  - name: decks
+    description: Saved Commander decks
+  - name: threads
+    description: Persistent deck chat threads
 paths:
   /healthz:
     get:
@@ -24,6 +30,471 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      tags: [decks]
+      summary: Get enabled app capabilities
+      responses:
+        "200":
+          description: Enabled formats and integrations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Capabilities"
+  /catalog/sets:
+    get:
+      operationId: getCatalogSets
+      tags: [catalog]
+      summary: List current Magic sets
+      responses:
+        "200":
+          description: Current catalog sets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CatalogSet"
+  /catalog/cards:
+    get:
+      operationId: searchCatalogCards
+      tags: [catalog]
+      summary: Search Magic cards
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: Matching cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CatalogCard"
+  /catalog/cards/{cardId}:
+    get:
+      operationId: getCatalogCard
+      tags: [catalog]
+      summary: Get card rules and printing details
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Card details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogCard"
+        "404":
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /decks:
+    get:
+      operationId: listDecks
+      tags: [decks]
+      summary: List the signed-in user's decks
+      responses:
+        "200":
+          description: Saved decks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeckSummary"
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createDeck
+      tags: [decks]
+      summary: Save a new deck draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckInput"
+      responses:
+        "201":
+          description: Saved deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+  /decks/generate:
+    post:
+      operationId: generateDeck
+      tags: [decks]
+      summary: Build a Commander deck from real catalog cards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckGenerateInput"
+      responses:
+        "201":
+          description: Generated deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+        "422":
+          description: Constraints prevent a complete deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildFailure"
+  /decks/import:
+    post:
+      operationId: importDeck
+      tags: [decks]
+      summary: Import a plain-text decklist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckImportInput"
+      responses:
+        "201":
+          description: Imported draft, including unresolved names
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckImportResult"
+  /decks/{deckId}:
+    get:
+      operationId: getDeck
+      tags: [decks]
+      summary: Open a saved deck
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Saved deck details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+        "404":
+          description: Deck not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateDeck
+      tags: [decks]
+      summary: Update deck settings and view preference
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckUpdate"
+      responses:
+        "200":
+          description: Updated deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+    delete:
+      operationId: deleteDeck
+      tags: [decks]
+      summary: Delete a saved deck
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deck deleted
+  /decks/{deckId}/cards:
+    put:
+      operationId: updateDeckCards
+      tags: [decks]
+      summary: Replace deck contents with selected catalog cards
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckCardsInput"
+      responses:
+        "200":
+          description: Updated and revalidated deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+  /decks/{deckId}/validate:
+    post:
+      operationId: validateDeck
+      tags: [decks]
+      summary: Recheck deck legality and price estimate
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Revalidated deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+  /decks/{deckId}/export:
+    get:
+      operationId: exportDeck
+      tags: [decks]
+      summary: Export a decklist as plain text
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Plain-text decklist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckExport"
+  /decks/{deckId}/revisions/preview:
+    post:
+      operationId: previewDeckRevision
+      tags: [decks]
+      summary: Preview card changes before applying them
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckRevisionInput"
+      responses:
+        "200":
+          description: Proposed deck changes and validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckRevisionPreview"
+  /decks/{deckId}/revisions/apply:
+    post:
+      operationId: applyDeckRevision
+      tags: [decks]
+      summary: Apply an accepted deck revision
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckRevisionInput"
+      responses:
+        "200":
+          description: Applied and revalidated deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+  /decks/{deckId}/revisions/undo:
+    post:
+      operationId: undoDeckRevision
+      tags: [decks]
+      summary: Restore the prior deck state
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Restored deck
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deck"
+  /decks/{deckId}/threads:
+    get:
+      operationId: listDeckThreads
+      tags: [threads]
+      summary: List a deck's chat threads
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deck threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeckThread"
+    post:
+      operationId: createDeckThread
+      tags: [threads]
+      summary: Create a deck chat thread
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckThreadInput"
+      responses:
+        "201":
+          description: Created thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckThread"
+  /decks/{deckId}/threads/{threadId}:
+    get:
+      operationId: getDeckThread
+      tags: [threads]
+      summary: Reopen a chat thread with its history
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Thread and persistent chat history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckThreadDetail"
+    patch:
+      operationId: updateDeckThread
+      tags: [threads]
+      summary: Rename a chat thread
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckThreadUpdate"
+      responses:
+        "200":
+          description: Renamed thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckThread"
+  /decks/{deckId}/threads/{threadId}/messages:
+    post:
+      operationId: sendDeckMessage
+      tags: [threads]
+      summary: Save a message and return AI availability status
+      parameters:
+        - name: deckId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: threadId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeckMessageInput"
+      responses:
+        "200":
+          description: Saved user message and assistant response state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeckMessageResult"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +504,434 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Capabilities:
+      type: object
+      properties:
+        supportedFormats:
+          type: array
+          items:
+            type: string
+            enum: [commander]
+        aiAvailable:
+          type: boolean
+        catalogName:
+          type: string
+      required: [supportedFormats, aiAvailable, catalogName]
+    CatalogSet:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        setType: { type: string }
+        releasedAt: { type: ["string", "null"] }
+        cardCount: { type: integer }
+        iconUri: { type: ["string", "null"] }
+      required: [code, name, setType, releasedAt, cardCount, iconUri]
+    CatalogCardFace:
+      type: object
+      properties:
+        name: { type: string }
+        imageUri: { type: ["string", "null"] }
+        manaCost: { type: ["string", "null"] }
+        typeLine: { type: ["string", "null"] }
+        oracleText: { type: ["string", "null"] }
+      required: [name, imageUri, manaCost, typeLine, oracleText]
+    CatalogCard:
+      type: object
+      properties:
+        id: { type: string }
+        oracleId: { type: ["string", "null"] }
+        name: { type: string }
+        imageUri: { type: ["string", "null"] }
+        imageLargeUri: { type: ["string", "null"] }
+        manaCost: { type: ["string", "null"] }
+        cmc: { type: number }
+        typeLine: { type: string }
+        oracleText: { type: ["string", "null"] }
+        colors:
+          type: array
+          items: { type: string, enum: [W, U, B, R, G] }
+        colorIdentity:
+          type: array
+          items: { type: string, enum: [W, U, B, R, G] }
+        setCode: { type: string }
+        setName: { type: string }
+        priceUsd: { type: ["number", "null"] }
+        legalCommander: { type: boolean }
+        cardFaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogCardFace"
+      required:
+        - id
+        - oracleId
+        - name
+        - imageUri
+        - imageLargeUri
+        - manaCost
+        - cmc
+        - typeLine
+        - oracleText
+        - colors
+        - colorIdentity
+        - setCode
+        - setName
+        - priceUsd
+        - legalCommander
+        - cardFaces
+    CardSelection:
+      type: object
+      properties:
+        cardId: { type: string }
+        quantity: { type: integer, minimum: 1, maximum: 100 }
+        locked: { type: boolean }
+      required: [cardId, quantity]
+    DeckCard:
+      type: object
+      properties:
+        card:
+          $ref: "#/components/schemas/CatalogCard"
+        quantity: { type: integer }
+        locked: { type: boolean }
+        isCommander: { type: boolean }
+        roles:
+          type: array
+          items: { type: string }
+      required: [card, quantity, locked, isCommander, roles]
+    DeckSettings:
+      type: object
+      properties:
+        format:
+          type: string
+          enum: [commander]
+        colorCount: { type: integer, minimum: 0, maximum: 5 }
+        colors:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [W, U, B, R, G] }
+        playstyle:
+          type: string
+          enum: [aggro, control, combo, midrange, help-me-choose]
+        theme: { type: ["string", "null"] }
+        budget: { type: ["number", "null"], minimum: 0 }
+        commanderName: { type: ["string", "null"] }
+        includeCards:
+          type: array
+          items: { type: string }
+        excludeCards:
+          type: array
+          items: { type: string }
+        competitiveness:
+          type: string
+          enum: [casual, balanced, high-power]
+        infiniteCombos: { type: boolean }
+        selectedSetCodes:
+          type: array
+          items: { type: string }
+        setMode:
+          type: string
+          enum: [any, prefer, only]
+      required:
+        - format
+        - colorCount
+        - colors
+        - playstyle
+        - theme
+        - budget
+        - commanderName
+        - includeCards
+        - excludeCards
+        - competitiveness
+        - infiniteCombos
+        - selectedSetCodes
+        - setMode
+    DeckStats:
+      type: object
+      properties:
+        manaCurve:
+          type: array
+          items:
+            type: object
+            properties:
+              manaValue: { type: integer }
+              count: { type: integer }
+            required: [manaValue, count]
+        manaSourcesByColor:
+          type: array
+          items:
+            type: object
+            properties:
+              color: { type: string }
+              count: { type: integer }
+            required: [color, count]
+        roleCounts:
+          type: array
+          items:
+            type: object
+            properties:
+              role: { type: string }
+              count: { type: integer }
+              cardIds:
+                type: array
+                items: { type: string }
+            required: [role, count, cardIds]
+      required: [manaCurve, manaSourcesByColor, roleCounts]
+    DeckGuide:
+      type: object
+      properties:
+        winPlan: { type: string }
+        openingHand: { type: string }
+        earlyGame: { type: string }
+        lateGame: { type: string }
+        synergies: { type: string }
+        recovery: { type: string }
+      required: [winPlan, openingHand, earlyGame, lateGame, synergies, recovery]
+    DeckLegality:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [legal, incomplete, illegal, draft]
+        totalCards: { type: integer }
+        issues:
+          type: array
+          items: { type: string }
+      required: [status, totalCards, issues]
+    DeckPricing:
+      type: object
+      properties:
+        knownSubtotal: { type: number }
+        estimatedTotal: { type: ["number", "null"] }
+        missingPriceCount: { type: integer }
+        budget: { type: ["number", "null"] }
+        overBudgetBy: { type: ["number", "null"] }
+        verified: { type: boolean }
+      required: [knownSubtotal, estimatedTotal, missingPriceCount, budget, overBudgetBy, verified]
+    Deck:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        format: { type: string, enum: [commander] }
+        settings:
+          $ref: "#/components/schemas/DeckSettings"
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckCard"
+        commanderCardId: { type: ["string", "null"] }
+        commanderName: { type: ["string", "null"] }
+        totalCards: { type: integer }
+        viewPreference: { type: string, enum: [list, images] }
+        legality:
+          $ref: "#/components/schemas/DeckLegality"
+        pricing:
+          $ref: "#/components/schemas/DeckPricing"
+        stats:
+          $ref: "#/components/schemas/DeckStats"
+        guide:
+          $ref: "#/components/schemas/DeckGuide"
+        unresolvedNames:
+          type: array
+          items: { type: string }
+        canUndo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required:
+        - id
+        - title
+        - format
+        - settings
+        - cards
+        - commanderCardId
+        - commanderName
+        - totalCards
+        - viewPreference
+        - legality
+        - pricing
+        - stats
+        - guide
+        - unresolvedNames
+        - canUndo
+        - createdAt
+        - updatedAt
+    DeckSummary:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        format: { type: string, enum: [commander] }
+        commanderName: { type: ["string", "null"] }
+        totalCards: { type: integer }
+        status: { type: string, enum: [legal, incomplete, illegal, draft] }
+        estimatedTotal: { type: ["number", "null"] }
+        missingPriceCount: { type: integer }
+        viewPreference: { type: string, enum: [list, images] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, title, format, commanderName, totalCards, status, estimatedTotal, missingPriceCount, viewPreference, createdAt, updatedAt]
+    DeckInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        settings:
+          $ref: "#/components/schemas/DeckSettings"
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardSelection"
+      required: [title, settings, cards]
+    DeckGenerateInput:
+      type: object
+      properties:
+        request: { type: ["string", "null"] }
+        settings:
+          $ref: "#/components/schemas/DeckSettings"
+      required: [settings]
+    DeckUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        settings:
+          $ref: "#/components/schemas/DeckSettings"
+        viewPreference: { type: string, enum: [list, images] }
+      additionalProperties: false
+    DeckCardsInput:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardSelection"
+      required: [cards]
+    BuildFailure:
+      type: object
+      properties:
+        error: { type: string }
+        blockingSettings:
+          type: array
+          items: { type: string }
+        suggestions:
+          type: array
+          items: { type: string }
+      required: [error, blockingSettings, suggestions]
+    DeckImportInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        decklist: { type: string, minLength: 1 }
+        settings:
+          $ref: "#/components/schemas/DeckSettings"
+      required: [title, decklist, settings]
+    DeckImportResult:
+      type: object
+      properties:
+        deck:
+          $ref: "#/components/schemas/Deck"
+        unresolvedNames:
+          type: array
+          items: { type: string }
+      required: [deck, unresolvedNames]
+    DeckExport:
+      type: object
+      properties:
+        decklist: { type: string }
+      required: [decklist]
+    DeckRevisionInput:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/CardSelection"
+      required: [cards]
+    DeckRevisionPreview:
+      type: object
+      properties:
+        additions:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckCard"
+        removals:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckCard"
+        quantityChanges:
+          type: array
+          items:
+            type: object
+            properties:
+              cardName: { type: string }
+              before: { type: integer }
+              after: { type: integer }
+            required: [cardName, before, after]
+        cards:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckCard"
+        legality:
+          $ref: "#/components/schemas/DeckLegality"
+        pricing:
+          $ref: "#/components/schemas/DeckPricing"
+        warnings:
+          type: array
+          items: { type: string }
+      required: [additions, removals, quantityChanges, cards, legality, pricing, warnings]
+    DeckThread:
+      type: object
+      properties:
+        id: { type: string }
+        deckId: { type: string }
+        title: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, deckId, title, createdAt, updatedAt]
+    DeckThreadInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+      required: [title]
+    DeckThreadUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+      required: [title]
+    DeckMessage:
+      type: object
+      properties:
+        id: { type: string }
+        threadId: { type: string }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, threadId, role, content, createdAt]
+    DeckThreadDetail:
+      type: object
+      properties:
+        thread:
+          $ref: "#/components/schemas/DeckThread"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeckMessage"
+      required: [thread, messages]
+    DeckMessageInput:
+      type: object
+      properties:
+        content: { type: string, minLength: 1 }
+      required: [content]
+    DeckMessageResult:
+      type: object
+      properties:
+        message:
+          $ref: "#/components/schemas/DeckMessage"
+        aiAvailable: { type: boolean }
+        statusMessage: { type: string }
+      required: [message, aiAvailable, statusMessage]
 
